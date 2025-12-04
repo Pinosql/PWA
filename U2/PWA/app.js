@@ -3,7 +3,10 @@ let stream = null; //Mediastream actual de la camara
 let currentFacing = 'environment'; // User = frontal y enviroment = trasera
 let mediaRecorder = null; //Instancia de mediarecorder para audio 
 let chunks = []; //Buffers para audio grabado
+let audioStream = null; //Stream de microfono
 let beforeInstallEvent = null; //Evento diferido para mostrar el boton de instalacion
+let vibrateInterval = null; //Intervalo para vibracion
+let isRinging = false; //Estado del tono de llamada
 
 //Accesos rapidos al DOM
 const $ = (sel) => document.querySelector(sel);
@@ -19,8 +22,13 @@ const btnShot = $('#btnShot'); //boton para tomar foto
 const videoDevices = $('#videoDevices'); //select para camaras disponibles
 const btnStartRec = $('#btnStartRec'); //boton iniciar grabacion audio
 const btnStopRec = $('#btnStopRec'); //boton detener grabacion audio
-const recStatus = $('#recStatus'); //indicador del estado de grabacion
+const recStatus= $('#recStatus'); //indicador del estado de grabacion
 const btnInstall = $('#btnInstall'); //boton para instalar la PWA
+const btnVibrar = $('#btnVibrar'); //boton para vibracion
+const btnRingtone = $('#btnRingtone'); //boton para tono
+
+const ringtone = new Audio('assets/old_phone_ring.mp3'); //tono de llamada
+ringtone.loop = true;
 
 //instalacion de la PWA (A2HS)
 window.addEventListener('beforeinstallprompt', (e) => {
@@ -46,12 +54,11 @@ async function listVideoInputs () {
         const cams = devices.filter(d => d.kind === 'videoinput');
         //vacia el select y lo rrellena con las camaras detectadas
         videoDevices.innerHTML = '';
-        cams.forEach((d,i) => {
+        cams.forEach((d, i) => {
             const opt = document.createElement('option');
             opt.value = d.deviceId;
             opt.textContent = d.label || `Camara ${i + 1}`;
-            videoDevices.appendChild(opt);
-            //deviceide que usaremos para getusermedia
+            //deviceId que usaremos para getUserMedia
             videoDevices.appendChild(opt);
         });
     }
@@ -61,102 +68,99 @@ async function listVideoInputs () {
 }
 
 async function startCam (constraints = {}) {
-    //verifica el soporte de mediaDevices a traves de https
-    if(!('mediaDevices' in navigator)) {
-        alert('Este navegador no soporta el acceso a Camara/Microfono');
+    //Verifica el sorporte de mediadevices a traves de https
+    if (!('mediaDevices' in navigator)) {
+        alert('Este navegador no soporta el acceso a Camara/microfono');
         return;
-    } 
-    try {
-        //solicita ek stream de video (mas culaquier constraint recibidio)
-        stream = await navigator.mediaDevices.getUserMedia({video: { facingMode: currentFacing, ...constraints },audio: false});
-        //enlaza el stream al select de video para previzualizar
+    }
+    try{
+        //solicita el strean de video (mas cualquier constraint extra recivido)
+        stream = await navigator.mediaDevices.getUserMedia({
+            video : {facingMode: currentFacing, ...constraints},
+            audio: false
+        });
+        //Enlaza el stream al select de video para previsualizar
         video.srcObject = stream;
-
-        //habilitar los controles relacionados
+        //Habilitar los controles relacionados
         btnStopCam.disabled = false;
-        btnFlip.disabled = false;
         btnShot.disabled = false;
+        btnFlip.disabled = false;
         btnTorch.disabled = false;
 
-        //actualiza el listado de camaras disponibles
+        //Actualizar el listado de camaras disponibles
         await listVideoInputs();
-    }
-    catch (err) {
-        alert('No se pudo iniciar la camara: ' + err.message);
+    } catch (err) {
+        alert('no se pudo iniciar la camara: ' + err.message);
         console.error(err);
     }
 }
 
-function stopCam () {
-    //detiene todas las pistas del stream de video y libera la camara
-    if (stream) {
-        stream.getTracks().forEach(t => t.stop());
-        stream = null;
-    }
-
+async function stopCam () {
+    //Detiene todas las pistas del stream de video y libera la camara
+    if ( stream) { stream.getTracks().forEach(t => t.stop()); }
     stream = null;
     video.srcObject = null;
-
-    //deshabilitar los controles relacionados
+    //desahabilitar los controles de la camara
     btnStopCam.disabled = true;
-    btnFlip.disabled = true;
     btnShot.disabled = true;
+    btnFlip.disabled = true;
     btnTorch.disabled = true;
 }
 
-//botones de control de camara
+//bootones de control de camara
 btnStartCam.addEventListener('click', () => startCam());
-btnStopCam.addEventListener('click', stopCam);
+btnStopCam.addEventListener('click', () => stopCam());
+
 btnFlip.addEventListener('click', async () => {
-    //alterna entre camara frontal y trasera y reinicia el strea,
+    //alterna entre camara frontal y trasera
     currentFacing = (currentFacing === 'environment') ? 'user' : 'environment';
     stopCam();
     await startCam();
 });
 
 videoDevices.addEventListener('change', async (e) => {
-    //cambia a un devideId especifico elegido en el select});
+    //cambia a un deviceID especifico elegido en el select
     const id = e.target.value;
     stopCam();
     await startCam({deviceId: {exact: id}});
 });
 
 btnTorch.addEventListener('click', async () => {
-    //algunas plataformas permiten activar la linterna con applyConstraints
+    //añguinas plataformas permiten acitivar la linterna de la camara con applyConstraints
     try {
         const [track] = stream ? stream.getVideoTracks() : [];
         if (!track) return;
         const cts = track.getConstraints();
-        //alterna el estado del torch de forma simple (usando naive toggle)
+        //alterna el estado del torch de forma simple (usando bauve toggle)
         const torch = !(cts.advanced && cts.advanced[0]?.torch);
-        await track.applyConstraints({advanced: [{torch}]});
-    }
-    catch (err) {
-        alert('La linterna no e compatible con este dispositivo/navegador ');
+        await track.applyConstraints({ advanced: [{torch}] });
+    } catch (err) {
+        alert('La linterna no es compatible con este dispositivo/navegador', err);
     }
 });
 
 btnShot.addEventListener('click', () => {
-    //captura un frame del select de video y loo descarga como png
+    //captura un frame del select de video y lo desxarga como png
     if (!stream) return;
 
-    //Ajusta el canvas al tamaño real del video
+    //ajuste el canvas al tamaño real del video
     const t = video.videoWidth || 1280;
     const h = video.videoHeight || 720;
     canvas.width = t;
     canvas.height = h;
-    //dibula el frame actual en el canvas
+
+    //dibuja el frame actual del video en el canvas
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, t, h);
 
-    //exporta el contenido del canvas a BLOD y lo muestra o dscarga
+    //exporta el coontenido del canvas a blob y lo mustra o lo descarga
     canvas.toBlob((blob) => {
         const url = URL.createObjectURL(blob);
         //enlace de descarga
         const a = document.createElement('a');
         a.href = url;
         a.download = `foto-${Date.now()}.png`;
-        a.textContent = 'Descargar Foto';
+        a.textContent = 'Descargar foto';
         a.className = 'btn';
 
         //miniatura
@@ -170,43 +174,25 @@ btnShot.addEventListener('click', () => {
         wrap.appendChild(img);
         wrap.appendChild(a);
         photos.prepend(wrap);
-    }, 'image/png'
-);  
+    }, 'image/png');
 });
 
-//mediaRecorder para audio
-function supportRecorder () {
-    return 'MediaRecorder' in window; //copmprobacion del soporte
-}
-
+//grabacion de audio
 btnStartRec.addEventListener('click', async () => {
-    //inicia la grabacion de audio desde el microfono
-    if (!supportRecorder()) {
-        alert('no esta disponible en este navegador');
+    if (!('mediaDevices' in navigator)) {
+        alert('Este navegador no soporta el acceso a microfono');
         return;
     }
     try {
-        //solicita solo el audio del microfono 
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true,});
-        //crear el recorder con mimeType web
-        mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(audioStream);
         chunks = [];
 
-        //acumula trozos o fragmentos de audio cuando estan disponibles
         mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                chunks.push(e.data);
-            }
+            if (e.data.size > 0) chunks.push(e.data);
         };
 
-        //actualiza el estado visual al iniciar/detener
-        mediaRecorder.onstart = () => {
-            recStatus.textContent = 'Grabando...';
-        };
         mediaRecorder.onstop = () => {
-            recStatus.textContent = '';
-
-            //unir los chunks en un blob y agregar a la galeria
             const blob = new Blob(chunks, { type: 'audio/webm' });
             const url = URL.createObjectURL(blob);
 
@@ -214,21 +200,122 @@ btnStartRec.addEventListener('click', async () => {
             audio.controls = true;
             audio.src = url;
 
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `audio-${Date.now()}.webm`;
-            link.textContent = 'Descargar Audio';
-            link.className = 'btn';
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `audio-${Date.now()}.webm`;
+            a.textContent = 'Descargar audio';
+            a.className = 'btn';
 
             const wrap = document.createElement('div');
             wrap.appendChild(audio);
-            wrap.appendChild(link);
+            wrap.appendChild(a);
             audios.prepend(wrap);
+
+            recStatus.textContent = 'Audio guardado';
+            chunks = [];
+            if (audioStream) {
+                audioStream.getTracks().forEach(t => t.stop());
+                audioStream = null;
+            }
+            btnStartRec.disabled = false;
+            btnStopRec.disabled = true;
         };
-    //comienza a grabar y actualiza botones
-    mediaRecorder.start();
-    btnStartRec.disabled = true; //sirve oara evitar el doble inicio de grabacion
-    }catch (err) {
-        alert('no se pudo iniciar el microfono ' + err.message);
+
+        mediaRecorder.start();
+        recStatus.textContent = 'Grabando...';
+        btnStartRec.disabled = true;
+        btnStopRec.disabled = false;
+    } catch (err) {
+        alert('No se pudo iniciar la grabacion: ' + err.message);
+        console.error(err);
     }
 });
+
+btnStopRec.addEventListener('click', () => {
+    if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+    mediaRecorder.stop();
+    recStatus.textContent = 'Procesando audio...';
+});
+
+//vibracion
+function stopVibration () {
+    if (vibrateInterval) {
+        clearInterval(vibrateInterval);
+        vibrateInterval = null;
+    }
+    navigator.vibrate(0);
+    btnVibrar.textContent = 'Vibrar';
+}
+
+const supportsVibration = () =>
+    typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+
+function startVibration () {
+    const pattern = [400, 150, 400, 150, 500, 200, 500]; //patron mas largo y marcado
+    const total = pattern.reduce((a, b) => a + b, 0);
+    if (navigator.userActivation && !navigator.userActivation.isActive) {
+        alert('La vibracion requiere una interaccion directa del usuario. Toca el boton nuevamente.');
+        return;
+    }
+    const ok = navigator.vibrate(pattern);
+    if (ok === false) {
+        alert('La vibracion fue bloqueada o no es compatible en este dispositivo');
+        return;
+    }
+    vibrateInterval = setInterval(() => {
+        const allowed = navigator.vibrate(pattern);
+        if (allowed === false) {
+            stopVibration();
+        }
+    }, total + 250);
+    btnVibrar.textContent = 'Detener vibracion';
+}
+
+btnVibrar.addEventListener('click', () => {
+    if (!supportsVibration()) {
+        alert('Vibracion no soportada en este dispositivo/navegador');
+        return;
+    }
+    if (vibrateInterval) {
+        stopVibration();
+    } else {
+        startVibration();
+    }
+});
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+        stopVibration();
+    }
+});
+document.addEventListener('pagehide', stopVibration);
+
+//tono de llamada
+btnRingtone.addEventListener('click', async () => {
+    if (isRinging) {
+        ringtone.pause();
+        ringtone.currentTime = 0;
+        isRinging = false;
+        btnRingtone.textContent = 'Reproducir tono';
+        return;
+    }
+    try {
+        await ringtone.play();
+        isRinging = true;
+        btnRingtone.textContent = 'Detener tono';
+    } catch (err) {
+        alert('No se pudo reproducir el tono: ' + err.message);
+    }
+});
+
+//registro del service worker
+async function registerServiceWorker () {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+        await navigator.serviceWorker.register('./script.js');
+    } catch (err) {
+        console.warn('No se pudo registrar el Service Worker', err);
+    }
+}
+
+window.addEventListener('load', registerServiceWorker);
