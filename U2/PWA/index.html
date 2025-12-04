@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0
-    viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>PWA</title>
     <meta name="theme-color" content="#c634d9">
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="description" content="PWA (Cámara y Micrófono)">
+    <meta name="description" content="PWA (Camara y Microfono)">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -25,7 +24,7 @@
                 <select id="videoDevices"></select>
                 <button id="btnStartCam">Iniciar</button>
                 <button id="btnStopCam" disabled>Detener</button>
-                <button id="btnFlip" title="Cambiar cámara" disabled>Invertir</button>
+                <button id="btnFlip" title="Cambiar camara" disabled>Invertir</button>
                 <button id="btnTorch" title="Linterna" disabled>Linterna</button>
                 <button id="btnShot" disabled>Foto</button>
             </div>
@@ -38,7 +37,7 @@
         </section>
 
         <section class="card">
-            <h2>Grabación de Audio</h2>
+            <h2>Grabacion de Audio</h2>
             <div class="controls">
                 <button id="btnStartRec">REC</button>
                 <button id="btnStopRec" disabled>Stop</button>
@@ -57,16 +56,16 @@
         <section class="card">
             <h2>Tonos de llamada</h2>
             <div class="controls">
-                <button id="btnRingtone"> Reproducir tono </button>
+                <button id="btnRingtone">Reproducir tono</button>
             </div>
         </section>
 
         <section class="card">
-            <h2>Compátibilidad y permisos</h2>
+            <h2>Compatibilidad y permisos</h2>
             <ul>
                 <li>Requiere HTTPS y permisos del usuario</li>
                 <li>IOS restringe mas que Android y si una funcion no aparece es limitacion del navegador</li>
-                <li>Offline, la app cargo sin res, captira en vivo, requiere conexion con el hardware em este momento</li>
+                <li>Offline: la app carga recursos estaticos; capturar en vivo requiere conexion con el hardware en este momento</li>
             </ul>
             <details>
                 <summary>Prueba rapida sin permisos persistentes</summary>
